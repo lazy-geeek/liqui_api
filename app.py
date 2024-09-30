@@ -75,10 +75,10 @@ async def post_liquidations(liquidation_request: LiquidationRequest = Body(...))
     while current_start < end_datetime:
         current_end = current_start + timedelta(seconds=timeframe_seconds)
         query = f"""
-        SELECT symbol, {timeframe_seconds} AS timeframe, {int(current_start.timestamp() * 1000)} AS start_timestamp, {int(current_end.timestamp() * 1000)} AS end_timestamp, SUM(usd_size) AS cumulated_usd_size
+        SELECT symbol, {timeframe_seconds} AS timeframe, {int(current_start.timestamp() * 1000)} AS start_timestamp, {int(current_end.timestamp() * 1000)} AS end_timestamp, side, SUM(usd_size) AS cumulated_usd_size
         FROM {table_name}
         WHERE LOWER(symbol) = %s AND order_trade_time >= %s AND order_trade_time < %s
-        GROUP BY symbol, timeframe, start_timestamp, end_timestamp
+        GROUP BY symbol, timeframe, start_timestamp, end_timestamp, side
         """
 
         cursor.execute(
@@ -89,8 +89,8 @@ async def post_liquidations(liquidation_request: LiquidationRequest = Body(...))
                 int(current_end.timestamp() * 1000),
             ),
         )
-        result = cursor.fetchone()
-        if result:
+        results_for_timeframe = cursor.fetchall()
+        for result in results_for_timeframe:
             results.append(
                 {
                     "symbol": result[0],
@@ -103,7 +103,8 @@ async def post_liquidations(liquidation_request: LiquidationRequest = Body(...))
                     "end_timestamp_iso": datetime.fromtimestamp(
                         result[3] / 1000
                     ).isoformat(),
-                    "cumulated_usd_size": float(result[4]),
+                    "side": result[4],
+                    "cumulated_usd_size": float(result[5]),
                 }
             )
         current_start = current_end
