@@ -95,10 +95,12 @@ async def post_liquidations(liquidation_request: LiquidationRequest = Body(...))
                 {
                     "symbol": result[0],
                     "timeframe": liquidation_request.timeframe,
-                    "start_timestamp": datetime.fromtimestamp(
+                    "start_timestamp": result[2],
+                    "end_timestamp": result[3],
+                    "start_timestamp_iso": datetime.fromtimestamp(
                         result[2] / 1000
                     ).isoformat(),
-                    "end_timestamp": datetime.fromtimestamp(
+                    "end_timestamp_iso": datetime.fromtimestamp(
                         result[3] / 1000
                     ).isoformat(),
                     "cumulated_usd_size": float(result[4]),
