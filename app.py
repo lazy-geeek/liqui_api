@@ -129,7 +129,7 @@ async def get_symbols():
     query = """
     SELECT DISTINCT symbol
     FROM {}
-    WHERE symbol NOT REGEXP '^[a-zA-Z]+[0-9]+$'
+    WHERE symbol NOT REGEXP '[0-9]+$'
     ORDER BY symbol
     """.format(
         table_name
