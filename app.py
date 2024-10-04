@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 import mysql.connector
 import os
+import re
 
 app = FastAPI()
 
@@ -118,3 +119,28 @@ async def post_liquidations(liquidation_request: LiquidationRequest = Body(...))
     conn.close()
 
     return results
+
+
+@app.get("/api/symbols")
+async def get_symbols():
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor()
+
+    query = """
+    SELECT DISTINCT symbol
+    FROM {}
+    WHERE symbol NOT REGEXP '^[a-zA-Z]+[0-9]+$'
+    ORDER BY symbol
+    """.format(
+        table_name
+    )
+
+    cursor.execute(query)
+    results = cursor.fetchall()
+
+    symbols = [result[0] for result in results]
+
+    cursor.close()
+    conn.close()
+
+    return symbols
