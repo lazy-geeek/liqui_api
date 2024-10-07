@@ -38,12 +38,12 @@ class LiquidationRequest(BaseModel):
     end_timestamp_iso: str
 
 
-@app.post("/api/liquidations")
-async def post_liquidations(liquidation_request: LiquidationRequest = Body(...)):
+@app.get("/api/liquidations")
+async def get_liquidations(symbol: str = Query(..., description="Symbol to filter by"), timeframe: str = Query(..., description="Timeframe for aggregation"), start_timestamp_iso: str = Query(..., description="Start timestamp in ISO format"), end_timestamp_iso: str = Query(..., description="End timestamp in ISO format")):
     table_name = os.getenv("DB_LIQ_TABLENAME", "binance_liqs")
     try:
-        start_datetime = datetime.fromisoformat(liquidation_request.start_timestamp_iso)
-        end_datetime = datetime.fromisoformat(liquidation_request.end_timestamp_iso)
+        start_datetime = datetime.fromisoformat(start_timestamp_iso)
+        end_datetime = datetime.fromisoformat(end_timestamp_iso)
         start_timestamp = int(start_datetime.timestamp())
         end_timestamp = int(end_datetime.timestamp())
     except (TypeError, ValueError):
@@ -52,7 +52,7 @@ async def post_liquidations(liquidation_request: LiquidationRequest = Body(...))
             detail="start_timestamp and end_timestamp must be valid datetime strings in the format 'YYYY-MM-DD HH:MM'",
         )
 
-    timeframe_seconds = convert_timeframe_to_seconds(liquidation_request.timeframe)
+    timeframe_seconds = convert_timeframe_to_seconds(timeframe)
     if start_timestamp < 0 or end_timestamp < 0:
         raise HTTPException(
             status_code=400,
@@ -81,7 +81,7 @@ async def post_liquidations(liquidation_request: LiquidationRequest = Body(...))
         cursor.execute(
             query,
             (
-                liquidation_request.symbol.lower(),
+                symbol.lower(),
                 int(current_start.timestamp() * 1000),
                 int(current_end.timestamp() * 1000),
             ),
@@ -91,7 +91,7 @@ async def post_liquidations(liquidation_request: LiquidationRequest = Body(...))
             results.append(
                 {
                     "symbol": result[0],
-                    "timeframe": liquidation_request.timeframe,
+                    "timeframe": timeframe,
                     "start_timestamp": result[2],
                     "end_timestamp": result[3],
                     "start_timestamp_iso": datetime.fromtimestamp(
