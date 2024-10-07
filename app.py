@@ -34,20 +34,16 @@ def convert_timeframe_to_seconds(timeframe: str) -> int:
 class LiquidationRequest(BaseModel):
     symbol: str
     timeframe: str
-    start_timestamp: str
-    end_timestamp: str
+    start_timestamp_iso: str
+    end_timestamp_iso: str
 
 
 @app.post("/api/liquidations")
 async def post_liquidations(liquidation_request: LiquidationRequest = Body(...)):
     table_name = os.getenv("DB_LIQ_TABLENAME", "binance_liqs")
     try:
-        start_datetime = datetime.strptime(
-            liquidation_request.start_timestamp, "%Y-%m-%d %H:%M"
-        )
-        end_datetime = datetime.strptime(
-            liquidation_request.end_timestamp, "%Y-%m-%d %H:%M"
-        )
+        start_datetime = datetime.fromisoformat(liquidation_request.start_timestamp_iso)
+        end_datetime = datetime.fromisoformat(liquidation_request.end_timestamp_iso)
         start_timestamp = int(start_datetime.timestamp())
         end_timestamp = int(end_datetime.timestamp())
     except (TypeError, ValueError):
