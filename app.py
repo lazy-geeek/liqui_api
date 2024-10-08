@@ -7,6 +7,12 @@ import os
 import re
 from functools import lru_cache
 
+import os
+
+# Delete the log file if it exists
+if os.path.exists("app.log"):
+    os.remove("app.log")
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
