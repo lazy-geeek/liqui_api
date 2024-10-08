@@ -1,10 +1,18 @@
 from fastapi import FastAPI, HTTPException, Query, Body
 from pydantic import BaseModel
 from datetime import datetime, timedelta, timezone
+import logging
 import mysql.connector
 import os
 import re
 from functools import lru_cache
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("app.log"), logging.StreamHandler()],
+)
 
 app = FastAPI()
 
@@ -27,14 +35,14 @@ db_config = {
 table_name = os.getenv("DB_LIQ_TABLENAME")
 
 
-def convert_timeframe_to_seconds(timeframe: str) -> int:
+def convert_timeframe_to_milliseconds(timeframe: str) -> int:
     timeframe = timeframe.lower()
     if timeframe.endswith("m"):
-        return int(timeframe[:-1]) * 60
+        return int(timeframe[:-1]) * 60 * 1000
     elif timeframe.endswith("h"):
-        return int(timeframe[:-1]) * 3600
+        return int(timeframe[:-1]) * 3600 * 1000
     elif timeframe.endswith("d"):
-        return int(timeframe[:-1]) * 86400
+        return int(timeframe[:-1]) * 86400 * 1000
     else:
         raise ValueError("Invalid timeframe format")
 
@@ -60,19 +68,23 @@ async def get_liquidations(
         if start_timestamp.isdigit():
             start_timestamp = int(start_timestamp)
         else:
-            start_timestamp = int(datetime.fromisoformat(start_timestamp).timestamp())
+            start_timestamp = int(
+                datetime.fromisoformat(start_timestamp).timestamp() * 1000
+            )
 
         if end_timestamp.isdigit():
             end_timestamp = int(end_timestamp)
         else:
-            end_timestamp = int(datetime.fromisoformat(end_timestamp).timestamp())
+            end_timestamp = int(
+                datetime.fromisoformat(end_timestamp).timestamp() * 1000
+            )
     except (TypeError, ValueError):
         raise HTTPException(
             status_code=400,
-            detail="start_timestamp and end_timestamp must be valid Unix timestamps or datetime strings in the format 'YYYY-MM-DD HH:MM'",
+            detail="start_timestamp and end_timestamp must be valid Unix timestamps in miliseconds or datetime strings in ISO format",
         )
 
-    timeframe_seconds = convert_timeframe_to_seconds(timeframe)
+    timeframe_milliseconds = convert_timeframe_to_milliseconds(timeframe)
     if start_timestamp < 0 or end_timestamp < 0:
         raise HTTPException(
             status_code=400,
@@ -84,18 +96,21 @@ async def get_liquidations(
             status_code=400, detail="start_timestamp must be before end_timestamp"
         )
 
+    logging.info(
+        f"Fetching liquidations for symbol: {symbol}, timeframe: {timeframe}, start_timestamp: {start_timestamp}, end_timestamp: {end_timestamp}"
+    )
     conn = get_db_connection()
     cursor = conn.cursor()
 
     query = f"""
     SELECT symbol, 
-           FLOOR((order_trade_time/1000 - %s) / %s) * %s + %s AS start_timestamp,
-           FLOOR((order_trade_time/1000 - %s) / %s) * %s + %s + %s AS end_timestamp,
+           FLOOR((order_trade_time - %s) / %s) * %s + %s AS start_timestamp,
+           FLOOR((order_trade_time - %s) / %s) * %s + %s + %s AS end_timestamp,
            side, 
            SUM(usd_size) AS cumulated_usd_size
     FROM {table_name}
     WHERE LOWER(symbol) = %s 
-      AND order_trade_time BETWEEN %s*1000 AND %s*1000
+      AND order_trade_time BETWEEN %s AND %s
     GROUP BY symbol, start_timestamp, end_timestamp, side;
     """
 
@@ -103,14 +118,14 @@ async def get_liquidations(
         query,
         (
             start_timestamp,
-            timeframe_seconds,
-            timeframe_seconds,
+            timeframe_milliseconds,
+            timeframe_milliseconds,
             start_timestamp,
             start_timestamp,
-            timeframe_seconds,
-            timeframe_seconds,
+            timeframe_milliseconds,
+            timeframe_milliseconds,
             start_timestamp,
-            timeframe_seconds,
+            timeframe_milliseconds,
             symbol.lower(),
             start_timestamp,
             end_timestamp,
@@ -120,7 +135,7 @@ async def get_liquidations(
         {
             "timestamp": result[1],
             "timestamp_iso": datetime.fromtimestamp(
-                int(result[1]), tz=timezone.utc
+                int(result[1]) / 1000, tz=timezone.utc
             ).isoformat(),
             "side": result[3],
             "cumulated_usd_size": float(result[4]),
@@ -129,6 +144,9 @@ async def get_liquidations(
     ]
 
     if not results:
+        logging.warning(
+            f"No data found for symbol: {symbol}, timeframe: {timeframe}, start_timestamp: {start_timestamp}, end_timestamp: {end_timestamp}"
+        )
         raise HTTPException(
             status_code=404, detail="No data found for the given parameters"
         )
@@ -136,6 +154,7 @@ async def get_liquidations(
     cursor.close()
     # No need to close the connection as it's managed by the connection pool
 
+    logging.info(f"Returning {len(results)} liquidation records")
     return results
 
 
