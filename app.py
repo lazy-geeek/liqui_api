@@ -8,6 +8,7 @@ from functools import lru_cache
 
 app = FastAPI()
 
+
 # Cache for database connections
 @lru_cache(maxsize=1)
 def get_db_connection():
@@ -46,14 +47,21 @@ class LiquidationRequest(BaseModel):
 
 
 @app.get("/api/liquidations")
-async def get_liquidations(symbol: str = Query(..., description="Symbol to filter by"), timeframe: str = Query(..., description="Timeframe for aggregation"), start_timestamp: str = Query(..., description="Start timestamp in ISO or Unix format"), end_timestamp: str = Query(..., description="End timestamp in ISO or Unix format")):
+async def get_liquidations(
+    symbol: str = Query(..., description="Symbol to filter by"),
+    timeframe: str = Query(..., description="Timeframe for aggregation"),
+    start_timestamp: str = Query(
+        ..., description="Start timestamp in ISO or Unix format"
+    ),
+    end_timestamp: str = Query(..., description="End timestamp in ISO or Unix format"),
+):
     table_name = os.getenv("DB_LIQ_TABLENAME", "binance_liqs")
     try:
         if start_timestamp.isdigit():
             start_timestamp = int(start_timestamp)
         else:
             start_timestamp = int(datetime.fromisoformat(start_timestamp).timestamp())
-        
+
         if end_timestamp.isdigit():
             end_timestamp = int(end_timestamp)
         else:
@@ -110,15 +118,9 @@ async def get_liquidations(symbol: str = Query(..., description="Symbol to filte
     )
     results = [
         {
-            "symbol": result[0],
-            "timeframe": timeframe,
-            "start_timestamp": result[1],
-            "end_timestamp": result[2],
+            "timestamp": result[1],
             "start_timestamp_iso": datetime.utcfromtimestamp(
                 int(result[1])
-            ).isoformat(),
-            "end_timestamp_iso": datetime.utcfromtimestamp(
-                int(result[2])
             ).isoformat(),
             "side": result[3],
             "cumulated_usd_size": float(result[4]),
