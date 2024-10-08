@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query, Body
 from pydantic import BaseModel
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import mysql.connector
 import os
 import re
@@ -119,8 +119,8 @@ async def get_liquidations(
     results = [
         {
             "timestamp": result[1],
-            "start_timestamp_iso": datetime.utcfromtimestamp(
-                int(result[1])
+            "start_timestamp_iso": datetime.fromtimestamp(
+                int(result[1]), tz=timezone.utc
             ).isoformat(),
             "side": result[3],
             "cumulated_usd_size": float(result[4]),
