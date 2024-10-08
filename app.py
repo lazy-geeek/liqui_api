@@ -119,7 +119,7 @@ async def get_liquidations(
     results = [
         {
             "timestamp": result[1],
-            "start_timestamp_iso": datetime.fromtimestamp(
+            "timestamp_iso": datetime.fromtimestamp(
                 int(result[1]), tz=timezone.utc
             ).isoformat(),
             "side": result[3],
