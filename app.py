@@ -46,15 +46,22 @@ class LiquidationRequest(BaseModel):
 
 
 @app.get("/api/liquidations")
-async def get_liquidations(symbol: str = Query(..., description="Symbol to filter by"), timeframe: str = Query(..., description="Timeframe for aggregation"), start_timestamp_iso: str = Query(..., description="Start timestamp in ISO format"), end_timestamp_iso: str = Query(..., description="End timestamp in ISO format")):
+async def get_liquidations(symbol: str = Query(..., description="Symbol to filter by"), timeframe: str = Query(..., description="Timeframe for aggregation"), start_timestamp: str = Query(..., description="Start timestamp in ISO or Unix format"), end_timestamp: str = Query(..., description="End timestamp in ISO or Unix format")):
     table_name = os.getenv("DB_LIQ_TABLENAME", "binance_liqs")
     try:
-        start_timestamp = int(datetime.fromisoformat(start_timestamp_iso).timestamp())
-        end_timestamp = int(datetime.fromisoformat(end_timestamp_iso).timestamp())
+        if start_timestamp.isdigit():
+            start_timestamp = int(start_timestamp)
+        else:
+            start_timestamp = int(datetime.fromisoformat(start_timestamp).timestamp())
+        
+        if end_timestamp.isdigit():
+            end_timestamp = int(end_timestamp)
+        else:
+            end_timestamp = int(datetime.fromisoformat(end_timestamp).timestamp())
     except (TypeError, ValueError):
         raise HTTPException(
             status_code=400,
-            detail="start_timestamp and end_timestamp must be valid datetime strings in the format 'YYYY-MM-DD HH:MM'",
+            detail="start_timestamp and end_timestamp must be valid Unix timestamps or datetime strings in the format 'YYYY-MM-DD HH:MM'",
         )
 
     timeframe_seconds = convert_timeframe_to_seconds(timeframe)
