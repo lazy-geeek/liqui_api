@@ -1,24 +1,10 @@
 from fastapi import FastAPI, HTTPException, Query, Body
 from pydantic import BaseModel
 from datetime import datetime, timedelta, timezone
-import logging
 import mysql.connector
 import os
 import re
 from functools import lru_cache
-
-import os
-
-# Delete the log file if it exists
-if os.path.exists("app.log"):
-    os.remove("app.log")
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("app.log"), logging.StreamHandler()],
-)
 
 app = FastAPI()
 
@@ -102,9 +88,6 @@ async def get_liquidations(
             status_code=400, detail="start_timestamp must be before end_timestamp"
         )
 
-    logging.info(
-        f"Fetching liquidations for symbol: {symbol}, timeframe: {timeframe}, start_timestamp: {start_timestamp}, end_timestamp: {end_timestamp}"
-    )
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -150,9 +133,6 @@ async def get_liquidations(
     ]
 
     if not results:
-        logging.warning(
-            f"No data found for symbol: {symbol}, timeframe: {timeframe}, start_timestamp: {start_timestamp}, end_timestamp: {end_timestamp}"
-        )
         raise HTTPException(
             status_code=404, detail="No data found for the given parameters"
         )
@@ -160,7 +140,6 @@ async def get_liquidations(
     cursor.close()
     # No need to close the connection as it's managed by the connection pool
 
-    logging.info(f"Returning {len(results)} liquidation records")
     return results
 
 
