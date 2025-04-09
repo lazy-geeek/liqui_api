@@ -10,9 +10,13 @@ app = FastAPI()
 
 
 # Cache for database connections
-@lru_cache(maxsize=1)
 def get_db_connection():
-    return mysql.connector.connect(**db_config)
+    try:
+        conn = mysql.connector.connect(**db_config)
+        return conn
+    except mysql.connector.Error as err:
+        print(f"FATAL: Could not connect to database: {err}")
+        raise HTTPException(status_code=503, detail="Database service unavailable")
 
 
 # MySQL database configuration from environment variables
@@ -88,81 +92,103 @@ async def get_liquidations(
             status_code=400, detail="start_timestamp must be before end_timestamp"
         )
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
-    query = f"""
-    SELECT symbol, 
-           FLOOR((order_trade_time - %s) / %s) * %s + %s AS start_timestamp,
-           FLOOR((order_trade_time - %s) / %s) * %s + %s + %s AS end_timestamp,
-           side, 
-           SUM(usd_size) AS cumulated_usd_size
-    FROM {table_name}
-    WHERE LOWER(symbol) = %s 
-      AND order_trade_time BETWEEN %s AND %s
-    GROUP BY symbol, start_timestamp, end_timestamp, side;
-    """
+        query = f"""
+        SELECT symbol,
+               FLOOR((order_trade_time - %s) / %s) * %s + %s AS start_timestamp,
+               FLOOR((order_trade_time - %s) / %s) * %s + %s + %s AS end_timestamp,
+               side,
+               SUM(usd_size) AS cumulated_usd_size
+        FROM {table_name}
+        WHERE LOWER(symbol) = %s
+          AND order_trade_time BETWEEN %s AND %s
+        GROUP BY symbol, start_timestamp, end_timestamp, side;
+        """
 
-    cursor.execute(
-        query,
-        (
-            start_timestamp,
-            timeframe_milliseconds,
-            timeframe_milliseconds,
-            start_timestamp,
-            start_timestamp,
-            timeframe_milliseconds,
-            timeframe_milliseconds,
-            start_timestamp,
-            timeframe_milliseconds,
-            symbol.lower(),
-            start_timestamp,
-            end_timestamp,
-        ),
-    )
-    results = [
-        {
-            "timestamp": result[1],
-            "timestamp_iso": datetime.fromtimestamp(
-                int(result[1]) / 1000, tz=timezone.utc
-            ).isoformat(),
-            "side": result[3],
-            "cumulated_usd_size": float(result[4]),
-        }
-        for result in cursor.fetchall()
-    ]
-
-    if not results:
-        raise HTTPException(
-            status_code=404, detail="No data found for the given parameters"
+        cursor.execute(
+            query,
+            (
+                start_timestamp,
+                timeframe_milliseconds,
+                timeframe_milliseconds,
+                start_timestamp,
+                start_timestamp,
+                timeframe_milliseconds,
+                timeframe_milliseconds,
+                start_timestamp,
+                timeframe_milliseconds,
+                symbol.lower(),
+                start_timestamp,
+                end_timestamp,
+            ),
         )
+        results = [
+            {
+                "timestamp": result[1],
+                "timestamp_iso": datetime.fromtimestamp(
+                    int(result[1]) / 1000, tz=timezone.utc
+                ).isoformat(),
+                "side": result[3],
+                "cumulated_usd_size": float(result[4]),
+            }
+            for result in cursor.fetchall()
+        ]
 
-    cursor.close()
-    # No need to close the connection as it's managed by the connection pool
+        if not results:
+            raise HTTPException(
+                status_code=404, detail="No data found for the given parameters"
+            )
 
-    return results
+        cursor.close()
+        return results
+
+    except mysql.connector.Error as err:
+        print(f"ERROR: Database error in /api/liquidations: {err}")
+        raise HTTPException(status_code=500, detail="Internal database error")
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        print(f"ERROR: Unexpected error in /api/liquidations: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
 
 
 @app.get("/api/symbols")
 async def get_symbols():
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
-    query = """
-    SELECT DISTINCT symbol
-    FROM {}
-    WHERE symbol NOT REGEXP '[0-9]+$'
-    ORDER BY symbol
-    """.format(
-        table_name
-    )
+        query = """
+        SELECT DISTINCT symbol
+        FROM {}
+        WHERE symbol NOT REGEXP '[0-9]+$'
+        ORDER BY symbol
+        """.format(
+            table_name
+        )
 
-    cursor.execute(query)
-    results = cursor.fetchall()
+        cursor.execute(query)
+        results = cursor.fetchall()
 
-    symbols = [result[0] for result in results]
+        symbols = [result[0] for result in results]
 
-    cursor.close()
-    # No need to close the connection as it's managed by the connection pool
+        cursor.close()
+        return symbols
 
-    return symbols
+    except mysql.connector.Error as err:
+        print(f"ERROR: Database error in /api/symbols: {err}")
+        raise HTTPException(status_code=500, detail="Internal database error")
+    except Exception as e:
+        print(f"ERROR: Unexpected error in /api/symbols: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
