@@ -21,6 +21,8 @@
 ```
 liqui_api/
 ├── app.py              # Main FastAPI application file
+├── README.md           # User-facing project documentation
+├── CLAUDE.md           # Claude-specific project documentation
 ├── pyproject.toml      # Poetry configuration
 ├── poetry.lock         # Poetry lock file
 ├── requirements.txt    # Auto-generated from Poetry
@@ -44,8 +46,8 @@ liqui_api/
 # Install dependencies using Poetry
 poetry install
 
-# Run development server
-uvicorn app:app --reload
+# Run development server with nohup (avoids 2-minute startup delays)
+nohup uvicorn app:app --reload &
 
 # Alternative: Run with gunicorn (production-like)
 gunicorn -w 4 -k uvicorn.workers.UvicornWorker app:app
@@ -231,6 +233,11 @@ DB_LIQ_TABLENAME=<table-name>  # Optional, defaults to "binance_liqs"
 3. **Data Validation**: All timestamps are validated and converted to milliseconds
 4. **Case Sensitivity**: Symbol queries are case-insensitive (converted to lowercase)
 5. **Performance**: Uses SQL aggregation for efficient time-based grouping
+
+## Documentation
+
+- **README.md**: Primary user-facing documentation with API endpoint details, installation instructions, and usage examples
+- **CLAUDE.md**: This file - contains technical implementation details and development guidelines specifically for Claude AI instances working on the codebase
 
 ## Recent Architectural Changes
 
