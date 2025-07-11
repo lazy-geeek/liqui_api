@@ -13,6 +13,13 @@ gunicorn = "^23.0.0"
 uvicorn = "^0.32.1"
 
 
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+pytest-asyncio = "^1.0.0"
+pytest-mock = "^3.14.1"
+httpx = "^0.28.1"
+pytest-cov = "^6.2.1"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
@@ -20,3 +27,6 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry-auto-export]
 output = "requirements.txt"
 without_hashes = true
+
+[tool.poetry.scripts]
+test = "pytest:main"
