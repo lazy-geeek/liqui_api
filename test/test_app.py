@@ -1,9 +1,10 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch, call, AsyncMock
 from datetime import datetime, timezone
 import mysql.connector
 from app import app, get_db_connection
+import json
 
 
 class TestDatabaseConnection:
@@ -36,12 +37,17 @@ class TestLiquidationsEndpoint:
     """Test suite for /api/liquidations endpoint."""
     
     @pytest.mark.asyncio
-    @patch('app.get_db_connection')
-    async def test_valid_symbol_and_timeframe(self, mock_get_conn, mock_env_vars, mock_db_connection, sample_liquidation_data):
+    @patch('app.async_execute_query')
+    @patch('cache_config.get_from_cache')
+    @patch('cache_config.set_in_cache')
+    async def test_valid_symbol_and_timeframe(self, mock_set_cache, mock_get_cache, mock_execute_query, mock_env_vars, sample_liquidation_data):
         """Test with valid symbol and timeframe."""
-        mock_conn, mock_cursor = mock_db_connection
-        mock_get_conn.return_value = mock_conn
-        mock_cursor.fetchall.return_value = sample_liquidation_data
+        # Mock cache miss
+        mock_get_cache.return_value = None
+        mock_set_cache.return_value = True
+        
+        # Mock database query
+        mock_execute_query.return_value = sample_liquidation_data
         
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get(
@@ -58,6 +64,47 @@ class TestLiquidationsEndpoint:
         data = response.json()
         assert len(data) == 4
         assert all(isinstance(item["cumulated_usd_size"], float) for item in data)
+        
+        # Verify cache was checked and set
+        mock_get_cache.assert_called_once()
+        mock_set_cache.assert_called_once()
+        
+        # Verify database was called
+        mock_execute_query.assert_called_once()
+    
+    @pytest.mark.asyncio
+    @patch('app.async_execute_query')
+    @patch('cache_config.get_from_cache')
+    @patch('cache_config.set_in_cache')
+    async def test_cache_hit_scenario(self, mock_set_cache, mock_get_cache, mock_execute_query, mock_env_vars, sample_liquidation_data):
+        """Test cache hit scenario where data is returned from cache."""
+        # Mock cache hit - return cached data
+        cached_data = [
+            {"timestamp": 1609459200000, "timestamp_iso": "2021-01-01T00:00:00Z", "side": "buy", "cumulated_usd_size": 100.5}
+        ]
+        mock_get_cache.return_value = cached_data
+        
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get(
+                "/api/liquidations",
+                params={
+                    "symbol": "BTCUSDT",
+                    "timeframe": "5m",
+                    "start_timestamp": "1609459200000",
+                    "end_timestamp": "1609462800000"
+                }
+            )
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data == cached_data
+        
+        # Verify cache was checked but not set (cache hit)
+        mock_get_cache.assert_called_once()
+        mock_set_cache.assert_not_called()
+        
+        # Verify database was NOT called (cache hit)
+        mock_execute_query.assert_not_called()
     
     @pytest.mark.asyncio
     @patch('app.get_db_connection')
