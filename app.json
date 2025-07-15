@@ -1,0 +1,80 @@
+{
+  "name": "liqui-api",
+  "description": "FastAPI REST API for querying cryptocurrency liquidation data",
+  "repository": "https://github.com/yourusername/liqui-api",
+  "logo": "",
+  "keywords": ["fastapi", "cryptocurrency", "liquidation", "api", "redis", "mysql"],
+  "success_url": "/",
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "standard-1x"
+    }
+  },
+  "addons": [
+    "redis:mini"
+  ],
+  "env": {
+    "REDIS_HOST": {
+      "description": "Redis host for caching (will be set by Redis addon)",
+      "required": false
+    },
+    "REDIS_PORT": {
+      "description": "Redis port (will be set by Redis addon)",
+      "required": false
+    },
+    "REDIS_PASSWORD": {
+      "description": "Redis password (will be set by Redis addon)",
+      "required": false
+    },
+    "REDIS_DB": {
+      "description": "Redis database number",
+      "value": "0",
+      "required": false
+    },
+    "CACHE_TTL_SECONDS": {
+      "description": "Default cache TTL in seconds",
+      "value": "300",
+      "required": false
+    },
+    "CACHE_TTL_SYMBOLS": {
+      "description": "Symbols cache TTL in seconds",
+      "value": "3600",
+      "required": false
+    },
+    "QUERY_TIMEOUT_SECONDS": {
+      "description": "Database query timeout in seconds",
+      "value": "30",
+      "required": false
+    },
+    "LONG_QUERY_TIMEOUT_SECONDS": {
+      "description": "Long database query timeout in seconds",
+      "value": "120",
+      "required": false
+    },
+    "DB_HOST": {
+      "description": "MySQL database host",
+      "required": true
+    },
+    "DB_USER": {
+      "description": "MySQL database username",
+      "required": true
+    },
+    "DB_PASSWORD": {
+      "description": "MySQL database password",
+      "required": true
+    },
+    "DB_DATABASE": {
+      "description": "MySQL database name",
+      "required": true
+    },
+    "DB_LIQ_TABLENAME": {
+      "description": "MySQL table name for liquidation data",
+      "value": "binance_liqs",
+      "required": false
+    }
+  },
+  "scripts": {
+    "postdeploy": "echo 'Deployment completed successfully'"
+  }
+}

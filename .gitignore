@@ -166,3 +166,9 @@ to_dos.md
 .claude/
 .mcp.json
 .vscode/settings.json
+
+# Deployment specific files
+backup_*.sql
+*.backup
+releases_*.txt
+emergency_backup_*.sql

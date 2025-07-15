@@ -11,6 +11,10 @@ fastapi = "^0.115.0"
 mysql-connector-python = "^9.0.0"
 gunicorn = "^23.0.0"
 uvicorn = "^0.32.1"
+redis = {extras = ["hiredis"], version = "^4.5.0"}
+fastapi-cache2 = "^0.2.1"
+aiomysql = "^0.2.0"
+hiredis = "^2.3.2"
 
 
 [tool.poetry.group.dev.dependencies]
