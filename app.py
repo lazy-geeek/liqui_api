@@ -1,10 +1,9 @@
-from fastapi import FastAPI, HTTPException, Query, Body
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import mysql.connector
 import os
-import re
-from functools import lru_cache, wraps
+from functools import wraps
 from contextlib import contextmanager
 from typing import Generator, Optional, Any, List, Tuple, Callable
 
@@ -36,7 +35,7 @@ def get_db_connection():
 # ==================== Database Utilities ====================
 
 @contextmanager
-def db_connection() -> Generator[mysql.connector.cursor.MySQLCursor, None, None]:
+def db_connection() -> Generator[Any, None, None]:
     """
     Context manager for database connections with automatic cleanup.
     
@@ -116,10 +115,7 @@ async def execute_query(
 
 # ==================== FastAPI Dependency Alternative ====================
 
-from fastapi import Depends
-from typing import Annotated
-
-def get_db_cursor() -> Generator[mysql.connector.cursor.MySQLCursor, None, None]:
+def get_db_cursor() -> Generator[Any, None, None]:
     """
     FastAPI dependency for database cursor.
     
@@ -134,7 +130,7 @@ def get_db_cursor() -> Generator[mysql.connector.cursor.MySQLCursor, None, None]
         
     Example usage in endpoint:
         @app.get("/api/example")
-        async def example_endpoint(cursor: Annotated[mysql.connector.cursor.MySQLCursor, Depends(get_db_cursor)]):
+        async def example_endpoint(cursor: Annotated[Any, Depends(get_db_cursor)]):
             cursor.execute("SELECT * FROM table")
             return cursor.fetchall()
     
@@ -166,7 +162,7 @@ def get_db_cursor() -> Generator[mysql.connector.cursor.MySQLCursor, None, None]
 # @app.get("/api/example-with-dependency")
 # @db_error_handler("/api/example-with-dependency")
 # async def example_with_dependency(
-#     cursor: Annotated[mysql.connector.cursor.MySQLCursor, Depends(get_db_cursor)]
+#     cursor: Annotated[Any, Depends(get_db_cursor)]
 # ):
 #     cursor.execute("SELECT COUNT(*) FROM binance_liqs")
 #     count = cursor.fetchone()[0]
@@ -235,8 +231,8 @@ async def get_liquidations(
     
     # Parameter validation
     try:
-        start_timestamp = parse_timestamp(start_timestamp)
-        end_timestamp = parse_timestamp(end_timestamp)
+        start_timestamp_ms = parse_timestamp(start_timestamp)
+        end_timestamp_ms = parse_timestamp(end_timestamp)
     except ValueError:
         raise HTTPException(
             status_code=400,
@@ -244,13 +240,13 @@ async def get_liquidations(
         )
 
     timeframe_milliseconds = convert_timeframe_to_milliseconds(timeframe)
-    if start_timestamp < 0 or end_timestamp < 0:
+    if start_timestamp_ms < 0 or end_timestamp_ms < 0:
         raise HTTPException(
             status_code=400,
             detail="start_timestamp and end_timestamp must be non-negative integers",
         )
 
-    if start_timestamp > end_timestamp:
+    if start_timestamp_ms > end_timestamp_ms:
         raise HTTPException(
             status_code=400, detail="start_timestamp must be before end_timestamp"
         )
@@ -261,7 +257,7 @@ async def get_liquidations(
            FLOOR((order_trade_time - %s) / %s) * %s + %s AS start_timestamp,
            FLOOR((order_trade_time - %s) / %s) * %s + %s + %s AS end_timestamp,
            side,
-           SUM(usd_size) AS cumulated_usd_size
+           SUM(average_price * order_filled_accumulated_quantity) AS cumulated_usd_size
     FROM {table_name}
     WHERE LOWER(symbol) = %s
       AND order_trade_time BETWEEN %s AND %s
@@ -269,18 +265,18 @@ async def get_liquidations(
     """
     
     params = (
-        start_timestamp,
+        start_timestamp_ms,
         timeframe_milliseconds,
         timeframe_milliseconds,
-        start_timestamp,
-        start_timestamp,
+        start_timestamp_ms,
+        start_timestamp_ms,
         timeframe_milliseconds,
         timeframe_milliseconds,
-        start_timestamp,
+        start_timestamp_ms,
         timeframe_milliseconds,
         symbol.lower(),
-        start_timestamp,
-        end_timestamp,
+        start_timestamp_ms,
+        end_timestamp_ms,
     )
     
     db_results = await execute_query(query, params)
@@ -317,6 +313,9 @@ async def get_symbols():
     """.format(table_name)
     
     results = await execute_query(query, ())
+    if not results:
+        return []
+    
     symbols = [result[0] for result in results]
     
     return symbols

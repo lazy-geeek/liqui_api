@@ -75,15 +75,15 @@ gunicorn -w 4 -k uvicorn.workers.UvicornWorker app:app
 
 ### 1. Get Aggregated Liquidations
 
-Retrieve liquidation data aggregated by timeframe and side.
+Retrieve liquidation data aggregated by timeframe and side. The data is grouped into time buckets based on the specified timeframe, with the total USD size of liquidations summed for each bucket and side.
 
 **Endpoint**: `GET /api/liquidations`
 
 **Parameters**:
 - `symbol` (required): Trading symbol (e.g., "BTCUSDT")
-- `timeframe` (optional): Aggregation period (e.g., "5m", "1h", "1d")
-- `start_timestamp` (optional): Start time (Unix ms or ISO format)
-- `end_timestamp` (optional): End time (Unix ms or ISO format)
+- `timeframe` (required): Aggregation period (e.g., "5m", "1h", "1d")
+- `start_timestamp` (required): Start time (Unix ms or ISO format)
+- `end_timestamp` (required): End time (Unix ms or ISO format)
 
 **Example Request**:
 ```bash
@@ -94,19 +94,25 @@ curl "http://localhost:8000/api/liquidations?symbol=BTCUSDT&timeframe=1h&start_t
 ```json
 [
   {
-    "time_bucket": 1609459200000,
+    "timestamp": 1609459200000,
+    "timestamp_iso": "2021-01-01T00:00:00+00:00",
     "side": "buy",
-    "total_usd_size": 1234567.89,
-    "count": 42
+    "cumulated_usd_size": 1234567.89
   },
   {
-    "time_bucket": 1609459200000,
+    "timestamp": 1609459200000,
+    "timestamp_iso": "2021-01-01T00:00:00+00:00",
     "side": "sell",
-    "total_usd_size": 987654.32,
-    "count": 35
+    "cumulated_usd_size": 987654.32
   }
 ]
 ```
+
+**Response Fields**:
+- `timestamp`: The start timestamp of the aggregation bucket (Unix milliseconds)
+- `timestamp_iso`: The same timestamp in ISO 8601 format
+- `side`: The liquidation side ("buy" or "sell")
+- `cumulated_usd_size`: Total USD value of liquidations for this bucket and side (calculated as sum of average_price × order_filled_accumulated_quantity)
 
 ### 2. Get Available Symbols
 
@@ -196,7 +202,6 @@ The API expects a MySQL table with the following columns:
 - `symbol`: Trading pair symbol (VARCHAR)
 - `order_trade_time`: Timestamp in milliseconds (BIGINT)
 - `side`: Trade side - buy/sell (VARCHAR)
-- `usd_size`: Liquidation size in USD (DECIMAL)
 - `order_type`: Order type (VARCHAR)
 - `time_in_force`: Time in force (VARCHAR)
 - `original_quantity`: Original order quantity (DECIMAL)

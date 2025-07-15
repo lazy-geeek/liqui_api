@@ -117,7 +117,7 @@ The application includes reusable database utilities for consistent connection m
    from fastapi import Depends
    
    @app.get("/api/endpoint")
-   async def endpoint(cursor: Annotated[MySQLCursor, Depends(get_db_cursor)]):
+   async def endpoint(cursor: Annotated[Any, Depends(get_db_cursor)]):
        cursor.execute("SELECT * FROM table")
    ```
    - Integrates with FastAPI's dependency injection system
@@ -136,12 +136,17 @@ The application connects to a MySQL database using environment variables:
 
 1. **GET /api/liquidations**
    - Query liquidation data with aggregation
-   - Parameters:
-     - `symbol`: Trading symbol to filter by (required)
+   - Parameters (all required):
+     - `symbol`: Trading symbol to filter by
      - `timeframe`: Aggregation timeframe (e.g., "5m", "1h", "1d")
      - `start_timestamp`: Start time (Unix ms or ISO format)
      - `end_timestamp`: End time (Unix ms or ISO format)
    - Returns aggregated liquidation data grouped by timeframe and side
+   - Response format:
+     - `timestamp`: Start timestamp of the aggregation bucket (Unix ms)
+     - `timestamp_iso`: ISO 8601 formatted timestamp
+     - `side`: Liquidation side ("buy" or "sell")
+     - `cumulated_usd_size`: Total USD value for this bucket and side
    - Example:
      ```bash
      curl "http://localhost:8000/api/liquidations?symbol=BTCUSDT&timeframe=1h&start_timestamp=1609459200000&end_timestamp=1609545600000"
@@ -204,7 +209,9 @@ For `/api/liquidations` endpoint:
 - `symbol`: Trading pair symbol (e.g., "BTCUSDT")
 - `order_trade_time`: Timestamp in milliseconds
 - `side`: Trade side (buy/sell)
-- `usd_size`: Size of the liquidation in USD
+- `average_price`: Average execution price
+- `order_filled_accumulated_quantity`: Total filled quantity
+Note: USD value is calculated as average_price × order_filled_accumulated_quantity
 
 For `/api/liquidation-orders` endpoint (additional columns):
 - `order_type`: Order type (e.g., LIMIT, MARKET)
@@ -251,6 +258,18 @@ DB_LIQ_TABLENAME=<table-name>  # Optional, defaults to "binance_liqs"
 - `/api/liquidation-orders` now includes `symbol` as the first field in each order object
 - Ensures consistency in response format for easier client-side processing
 - No breaking changes - existing fields remain in the same order after symbol
+
+### Performance Enhancement (2025-01-15)
+- Removed dependency on pre-calculated `usd_size` column in database
+- USD values now calculated dynamically as `average_price × order_filled_accumulated_quantity`
+- Updated `/api/liquidations` response format:
+  - Renamed `time_bucket` to `timestamp` for clarity
+  - Added `timestamp_iso` field for human-readable timestamps
+  - Renamed `total_usd_size` to `cumulated_usd_size`
+  - Removed `count` field (not used by clients)
+- Made all parameters required for `/api/liquidations` endpoint
+- Type hints updated to use `Any` instead of specific MySQL cursor types for better compatibility
+- Removed unused imports for cleaner codebase
 
 ## TODO Items
 
@@ -303,6 +322,7 @@ The project includes comprehensive test coverage:
 - Unit tests for all API endpoints with mocked database connections
 - Integration tests for end-to-end functionality
 - Test fixtures for common test data
+- Pytest configured with `asyncio_default_fixture_loop_scope = function` for proper async test isolation
 
 Run tests with:
 ```bash
